@@ -90,7 +90,44 @@
           <button type="submit" class="btn primary big" id="btn-play">Jogar</button>
           <button type="button" class="btn" id="btn-rules-menu">Regras</button>
         </div>
+
+        <fieldset class="online hidden" id="fs-online">
+          <legend>Jogar online com amigos</legend>
+          <p class="invite-banner hidden" id="invite-banner"></p>
+          <label class="field"><span>Seu nome</span><input type="text" id="online-name" maxlength="16" placeholder="Como os outros vão te ver" autocomplete="nickname"></label>
+          <button type="button" class="btn primary" id="btn-create">Criar sala e convidar</button>
+          <p class="muted small">A sala usa o modo, as regras e as cartas escolhidos acima. Lugares vazios ficam com o computador.</p>
+          <div class="join-row">
+            <input type="text" id="join-code" maxlength="4" placeholder="Código" aria-label="Código da sala" autocapitalize="characters">
+            <button type="button" class="btn" id="btn-join">Entrar na sala</button>
+          </div>
+          <p class="online-error hidden" id="online-error" role="alert"></p>
+        </fieldset>
       </form>
+    </div>
+  </section>
+
+  <!-- ================= SALA ================= -->
+  <section id="lobby" class="screen hidden">
+    <div class="menu-card">
+      <h1>Sala <span class="room-code" id="lobby-code"></span></h1>
+      <p class="tagline" id="lobby-desc"></p>
+
+      <div class="invite">
+        <input type="text" id="invite-link" readonly aria-label="Link de convite">
+        <div class="invite-btns">
+          <button type="button" class="btn primary" id="btn-share">Copiar convite</button>
+          <a class="btn" id="btn-whatsapp" target="_blank" rel="noopener">WhatsApp</a>
+        </div>
+      </div>
+
+      <ul class="seats" id="lobby-seats"></ul>
+      <p class="muted small" id="lobby-hint"></p>
+
+      <div class="menu-actions">
+        <button type="button" class="btn primary big" id="btn-start">Começar partida</button>
+        <button type="button" class="btn" id="btn-leave">Sair da sala</button>
+      </div>
     </div>
   </section>
 
@@ -151,6 +188,7 @@
     <div class="statusbar" id="status" role="status" aria-live="polite"></div>
   </section>
 </main>
+<div class="net-toast hidden" id="net-toast" role="status" aria-live="polite"></div>
 
 <!-- ================= DIÁLOGOS ================= -->
 <dialog id="dlg-result">

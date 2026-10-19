@@ -14,7 +14,7 @@
   /*  Configurações                                                      */
   /* ------------------------------------------------------------------ */
 
-  const DEFAULTS = { mode: '1v1', level: 'medium', rules: 'classic', target: 2, p120: 4, hs: 3, live: true, speed: 'normal' };
+  const DEFAULTS = { mode: '1v1', level: 'medium', rules: 'classic', target: 2, p120: 4, hs: 3, live: true, speed: 'normal', name: '' };
   const SPEED = { slow: 1.6, normal: 1, fast: 0.5 };
   const STORE_KEY = 'bisca.settings.v1';
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -52,13 +52,16 @@
   const posOf = (p) => POS[ui.match.n][p];
 
   function nameOf(p) {
-    if (ui.match.n === 2) return p === 0 ? 'Você' : 'Computador';
+    if (p === 0) return 'Você';
+    if (net.code && ui.match.names) return esc(ui.match.names[serverSeat(p)]);
+    if (ui.match.n === 2) return 'Computador';
     return ['Você', 'Rival 1', 'Parceiro', 'Rival 2'][p];
   }
   function teamName(t) {
-    if (ui.match.n === 2) return t === 0 ? 'Você' : 'Computador';
+    if (ui.match.n === 2) return t === 0 ? 'Você' : nameOf(1);
     return t === 0 ? 'Nós' : 'Eles';
   }
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
 
   /** Executa fn depois de ms (escalado pela velocidade), a menos que a partida mude/pause. */
   function later(ms, fn) {
@@ -162,6 +165,7 @@
 
   function showScreen(id) {
     $('#menu').classList.toggle('hidden', id !== 'menu');
+    $('#lobby').classList.toggle('hidden', id !== 'lobby');
     $('#game').classList.toggle('hidden', id !== 'game');
   }
 
@@ -374,19 +378,32 @@
     if (m.rules !== 'capixaba') { dealHand(false); return; }
     const cutter = B.cutterOf(m);
     if (cutter !== 0) { dealHand(AI.decideKnock(m, cutter, Math.random)); return; }
-    const g = ui.gen;
+    ui.knockGen = ui.gen;
+    askKnock();
+  }
+
+  /** Mesa vazia entre duas mãos, enquanto quem corta decide se bate. */
+  function clearTableBetweenHands() {
+    const m = ui.match;
     resetTable();
-    renderNameplates();    $('#trump-chip').innerHTML = '';
+    ui.H = null;
+    renderNameplates();
+    $('#trump-chip').innerHTML = '';
     [0, 1].forEach((t) => { $('#pts-' + t).textContent = '0'; $('#team-' + t).classList.remove('lead'); });
     $('#matchinfo').innerHTML = `Mão ${m.handNo + 1} &middot; Pontos ${m.sets[0]}–${m.sets[1]}<br>capixaba, até ${m.target}`;
+  }
+
+  function askKnock() {
+    const m = ui.match;
+    clearTableBetweenHands();
     setStatus('Você corta o baralho.');
     $('#knock-score').innerHTML = `Placar: <b>${teamName(0)} ${m.sets[0]}</b> × <b>${m.sets[1]} ${teamName(1)}</b> (até ${m.target})`;
-    ui.knockGen = g;
     openDialog(dlgs.knock);
   }
 
   function answerKnock(knocked) {
     dlgs.knock.close();
+    if (net.code) { netSend({ t: 'knock', yes: knocked }); setStatus('Distribuindo as cartas…'); return; }
     if (ui.knockGen !== ui.gen) return;
     ui.knockGen = -1;
     dealHand(knocked);
@@ -394,8 +411,13 @@
 
   function dealHand(knocked) {
     ui.gen++;
-    const m = ui.match;
-    const H = (ui.H = B.startHand(m, Math.random, knocked));
+    ui.H = B.startHand(ui.match, Math.random, knocked);
+    showDeal();
+  }
+
+  /** Mostra a distribuição da mão ui.H (local ou recebida do servidor). */
+  function showDeal() {
+    const m = ui.match, H = ui.H;
     resetTable();
     ui.stockShown = H.stock.length;
     ui.trumpShown = true;
@@ -419,7 +441,7 @@
         });
       } else {
         const box = $('#hand-' + posOf(p));
-        for (let j = 0; j < H.hs; j++) {
+        for (let j = 0; j < H.hands[p].length; j++) {
           const b = backEl();
           box.appendChild(b);
           flyFrom(b, stackRect, { dur: 460, delay: (j * H.n + order) * stagger });
@@ -439,8 +461,19 @@
   function nextStep() {
     const H = ui.H;
     renderNameplates();
+    if (net.code) {
+      // online: o servidor manda as próximas jogadas; aqui só mostra de quem é a vez
+      if (H.over) setStatus('Fim da mão.');
+      else if (H.turn < 0) setStatus('&nbsp;');
+      else if (H.turn === 0) {
+        setHumanTurn(true);
+        setStatus(H.trick.length ? 'Sua vez: escolha uma carta.' : 'Sua vez: abra a vaza com uma carta.');
+      } else setStatus(`Vez de <b>${nameOf(H.turn)}</b>…`);
+      netIdle();
+      return;
+    }
     if (H.over) { endHand(); return; }
-    if (H.turn < 0) { setStatus('&nbsp;'); later(850, collect); return; }
+    if (H.turn < 0) { setStatus('&nbsp;'); later(850, () => collect()); return; }
     if (H.turn === 0) {
       setHumanTurn(true);
       setStatus(H.trick.length ? 'Sua vez: escolha uma carta.' : 'Sua vez: abra a vaza com uma carta.');
@@ -457,6 +490,11 @@
   function humanPlay(c) {
     if (!ui.humanTurn || ui.H.turn !== 0 || !ui.handEls.has(c)) return;
     setHumanTurn(false);
+    if (net.code) {
+      ui.handEls.get(c).classList.add('sending');
+      netSend({ t: 'play', card: c });
+      return;
+    }
     playCard(0, c);
   }
 
@@ -471,17 +509,11 @@
     const H = ui.H;
     const pos = posOf(p);
     let from;
-    if (p === 0) {
-      const el = ui.handEls.get(c);
-      from = el.getBoundingClientRect();
-      el.remove();
-      ui.handEls.delete(c);
-    } else {
-      const last = $('#hand-' + pos).lastElementChild;
-      from = last.getBoundingClientRect();
-      last.remove();
-    }
-    B.play(H, c);
+    const src = p === 0 ? ui.handEls.get(c) : $('#hand-' + pos).lastElementChild;
+    from = (src || $('#np-' + pos)).getBoundingClientRect();
+    if (src) src.remove();
+    if (p === 0) ui.handEls.delete(c);
+    if (net.code) mirrorPlay(H, p, c); else B.play(H, c);
     const el = cardEl(c);
     setPose(el);
     $('#slot-' + pos).appendChild(el);
@@ -490,9 +522,9 @@
     nextStep();
   }
 
-  function collect() {
-    const H = ui.H;
-    const res = B.resolveTrick(H);
+  /** Recolhe a vaza; online, `given` é o resultado já calculado pelo servidor. */
+  function collect(given) {
+    const res = given || B.resolveTrick(ui.H);
     const winPos = posOf(res.winner);
     const winCard = $('#slot-' + winPos + ' .card');
     if (winCard) winCard.classList.add('winner');
@@ -511,7 +543,7 @@
 
   function afterCollect(res) {
     const H = ui.H;
-    if (H.over) { endHand(); return; }
+    if (H.over) { if (net.code) nextStep(); else endHand(); return; }
     const stackRect = $('#stack').getBoundingClientRect();
     const trumpEl = $('#trumpcard .card');
     const trumpRect = trumpEl ? trumpEl.getBoundingClientRect() : stackRect;
@@ -534,14 +566,15 @@
     later(res.draws.length * 130 + 450, nextStep);
   }
 
-  function endHand() {
+  /** Fim da mão; online, `given` é o resultado que veio do servidor (já aplicado ao placar). */
+  function endHand(given) {
     const H = ui.H, m = ui.match;
     setHumanTurn(false);
-    const w = B.finishHand(m, H);
+    const w = given || B.finishHand(m, H);
     renderNameplates();
     renderScores(true);
     setStatus('Fim da mão.');
-    later(700, () => showResult(w));
+    later(700, () => { showResult(w); if (net.code) netIdle(); });
   }
 
   /* ------------------------------------------------------------------ */
@@ -571,12 +604,13 @@
   function showResult(w) {
     const H = ui.H, m = ui.match;
     const two = m.n === 2;
+    const wt = w.winner;
+    const rival = two ? nameOf(1) : 'A dupla adversária';
     let title;
     if (m.over) {
-      title = m.winner === 0 ? (two ? 'Você venceu a partida!' : 'Sua dupla venceu a partida!')
-        : (two ? 'O computador venceu a partida' : 'A dupla adversária venceu a partida');
-    } else if (w === 0) title = two ? 'Você venceu a mão!' : 'Sua dupla venceu a mão!';
-    else if (w === 1) title = two ? 'O computador venceu a mão' : 'A dupla adversária venceu a mão';
+      title = m.winner === 0 ? (two ? 'Você venceu a partida!' : 'Sua dupla venceu a partida!') : `${rival} venceu a partida`;
+    } else if (wt === 0) title = two ? 'Você venceu a mão!' : 'Sua dupla venceu a mão!';
+    else if (wt === 1) title = `${rival} venceu a mão`;
     else if (H.reason === 'match') title = 'Partida empatada nos pontos extras';
     else title = 'Mão empatada: 60 a 60';
     $('#result-title').textContent = title;
@@ -587,7 +621,7 @@
 
     const lines = $('#result-lines');
     lines.innerHTML = '';
-    if (m.rules === 'capixaba') {
+    if (m.rules === 'capixaba' && w.lines) {
       w.lines.forEach((ln) => {
         const li = document.createElement('li');
         li.innerHTML = `<span>${ln.label}</span><b>${teamName(ln.team)} +${ln.points}</b>`;
@@ -600,7 +634,7 @@
     bars.innerHTML = '';
     [0, 1].forEach((t) => {
       const row = document.createElement('div');
-      row.className = 'rbar' + (w === t ? ' won' : '');
+      row.className = 'rbar' + (wt === t ? ' won' : '');
       row.innerHTML = `<span>${teamName(t)}</span><span class="track"><span class="fill"></span><span class="mark" title="61 pontos"></span></span><span class="num">${H.pts[t]}</span>`;
       bars.appendChild(row);
     });
@@ -617,7 +651,15 @@
       return b;
     };
     let focusBtn;
-    if (m.over) {
+    if (net.code) {
+      // online: qualquer jogador pode seguir; a mão nova (ou a sala) chega pelo servidor para todos
+      if (m.over) {
+        mkBtn('Sair da sala', '', leaveRoom);
+        focusBtn = mkBtn('Voltar para a sala', 'primary', () => { netSend({ t: 'restart' }); setStatus('Voltando para a sala…'); });
+      } else {
+        focusBtn = mkBtn('Próxima mão', 'primary', () => { netSend({ t: 'next' }); setStatus('Começando a próxima mão…'); });
+      }
+    } else if (m.over) {
       mkBtn('Menu', '', goMenu);
       focusBtn = mkBtn('Nova partida', 'primary', startMatch);
     } else {
@@ -640,6 +682,350 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /*  Online (salas)                                                     */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * O servidor (server.js) embaralha, valida e joga pelos lugares vazios. Aqui ficam só um "espelho"
+   * da mão (ui.H, com as cartas dos outros escondidas como -1) e uma fila de mensagens: cada uma é
+   * mostrada com a mesma animação do jogo local e, ao terminar, nextStep()/netIdle() libera a próxima.
+   */
+  const net = {
+    ws: null, code: null, seat: 0, n: 2, room: null,
+    want: null,          // mensagem de entrada (criar/entrar) reenviada ao reconectar
+    queue: [], busy: false, retry: 0
+  };
+  const ONLINE = location.protocol === 'http:' || location.protocol === 'https:';
+  const TOKEN_KEY = 'bisca.room.';
+
+  // o servidor numera os lugares 0..n-1; na tela eu sou sempre o 0 e a minha dupla é a 0
+  const localSeat = (s) => (s - net.seat + net.n) % net.n;
+  const serverSeat = (p) => (p + net.seat) % net.n;
+  const localTeam = (t) => (t < 0 ? t : t ^ (net.seat & 1));
+  const byTeam = (a) => (net.seat & 1 ? [a[1], a[0]] : a.slice());
+  const withLocalTeam = (list) => list.map((e) => Object.assign({}, e, { team: localTeam(e.team) }));
+
+  function storedToken(code) {
+    try { return localStorage.getItem(TOKEN_KEY + code) || null; } catch (e) { return null; }
+  }
+  function storeToken(code, token) {
+    try { if (token) localStorage.setItem(TOKEN_KEY + code, token); else localStorage.removeItem(TOKEN_KEY + code); } catch (e) { /* sem armazenamento */ }
+  }
+  function setRoomUrl(code) {
+    try { history.replaceState(null, '', code ? '?sala=' + code : location.pathname); } catch (e) { /* ignora */ }
+  }
+  const inviteLink = (code) => location.origin + location.pathname + '?sala=' + code;
+  const inviteText = (code) => `Bora jogar Bisca? Entra na minha sala ${code}: ${inviteLink(code)}`;
+
+  let toastTimer = 0;
+  function toast(text, ms) {
+    const t = $('#net-toast');
+    t.textContent = text;
+    t.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    if (ms) toastTimer = setTimeout(hideToast, ms);
+  }
+  function hideToast() { $('#net-toast').classList.add('hidden'); }
+
+  function showOnlineError(text) {
+    const el = $('#online-error');
+    el.textContent = text;
+    el.classList.toggle('hidden', !text);
+  }
+
+  function netConnect() {
+    if (net.ws && net.ws.readyState <= 1) return;
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+    net.ws = ws;
+    ws.onopen = () => { net.retry = 0; if (net.want) ws.send(JSON.stringify(net.want)); };
+    ws.onmessage = (e) => {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch (err) { return; }
+      onNet(msg);
+    };
+    ws.onclose = () => {
+      if (net.ws !== ws) return;
+      net.ws = null;
+      if (!net.want) return;
+      net.retry++;
+      if (net.retry > 8 && !net.code) { net.want = null; hideToast(); showOnlineError('Não foi possível conectar ao servidor.'); return; }
+      toast('Conexão perdida. Reconectando…');
+      setTimeout(() => { if (net.want) netConnect(); }, Math.min(5000, 500 * net.retry));
+    };
+  }
+  function netSend(msg) {
+    if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(msg));
+  }
+  function netStart(msg) {
+    showOnlineError('');
+    net.want = msg;
+    toast('Conectando…');
+    if (net.ws && net.ws.readyState === 1) netSend(msg); else netConnect();
+  }
+
+  function leaveRoom() {
+    netSend({ t: 'leave' });
+    if (net.code) storeToken(net.code, null);
+    const ws = net.ws;
+    Object.assign(net, { ws: null, code: null, room: null, want: null, queue: [], busy: false });
+    if (ws) setTimeout(() => ws.close(), 300);
+    setRoomUrl(null);
+    hideToast();
+    ui.H = null;
+    goMenu();
+  }
+
+  function onNet(msg) {
+    switch (msg.t) {
+      case 'joined':
+        // começo (ou recomeço, ao reconectar): descarta o que estava na fila
+        ui.gen++;
+        Object.assign(net, { code: msg.code, seat: msg.seat, queue: [], busy: false });
+        net.want = { t: 'join', code: msg.code, token: msg.token, name: settings.name };
+        storeToken(msg.code, msg.token);
+        setRoomUrl(msg.code);
+        hideToast();
+        return;
+      case 'room':
+        net.room = msg;
+        net.n = msg.seats.length;
+        net.seat = msg.you;
+        if (msg.phase === 'lobby') {
+          if ($('#lobby').classList.contains('hidden')) showLobby(); else renderLobby();
+        }
+        return;
+      case 'error':
+        if (msg.code === 'play') {
+          $$('#hand-s .sending').forEach((el) => el.classList.remove('sending'));
+          if (ui.H && ui.H.turn === 0 && !ui.H.over) setHumanTurn(true);
+          toast(msg.msg, 2500);
+          return;
+        }
+        // não deu para entrar na sala
+        if (net.code) storeToken(net.code, null);
+        if (net.want && net.want.code) storeToken(net.want.code, null);
+        Object.assign(net, { code: null, room: null, want: null, queue: [], busy: false });
+        setRoomUrl(null);
+        hideToast();
+        goMenu();
+        showOnlineError(msg.msg);
+        return;
+      case 'kicked':
+        Object.assign(net, { code: null, room: null, want: null, queue: [], busy: false });
+        goMenu();
+        showOnlineError(msg.msg);
+        return;
+      case 'left':
+        return;
+      default:
+        net.queue.push(msg);
+        if (!net.busy) netNext();
+    }
+  }
+
+  function netNext() {
+    const msg = net.queue.shift();
+    if (!msg) { net.busy = false; return; }
+    net.busy = true;
+    handleGame(msg);
+  }
+  /** A mensagem atual terminou de ser mostrada: passa para a próxima. */
+  function netIdle() {
+    net.busy = false;
+    if (net.queue.length) setTimeout(() => { if (!net.busy) netNext(); }, 0);
+  }
+
+  /** Espelho local da mão a partir do que o servidor mostra a este jogador. */
+  function mirrorFrom(v) {
+    const hands = [];
+    for (let p = 0; p < v.n; p++) {
+      const s = serverSeat(p);
+      hands.push(p === 0 ? v.hand.slice() : new Array(v.counts[s]).fill(-1));
+    }
+    return {
+      n: v.n, hs: v.hs, dealer: localSeat(v.dealer), hands, stock: new Array(v.stockLen).fill(-1),
+      trumpCard: v.trumpCard, trump: v.trump, trumpHolder: v.trumpHolder < 0 ? -1 : localSeat(v.trumpHolder),
+      trick: v.trick.map((t) => ({ p: localSeat(t.p), c: t.c })),
+      leader: localSeat(v.leader), turn: v.turn < 0 ? -1 : localSeat(v.turn),
+      pts: byTeam(v.pts), bonus: byTeam(v.bonus), events: withLocalTeam(v.events),
+      over: v.over, reason: v.reason, rules: v.rules, knocked: v.knocked, trickNo: v.trickNo, applied: false
+    };
+  }
+
+  function mirrorPlay(H, p, c) {
+    const h = H.hands[p];
+    if (p === 0) { const i = h.indexOf(c); if (i >= 0) h.splice(i, 1); } else h.pop();
+    H.trick.push({ p, c });
+    H.turn = H.trick.length === H.n ? -1 : (p + 1) % H.n;
+  }
+
+  /** Mesa montada de uma vez (ao entrar ou reconectar no meio da mão). */
+  function renderSnapshot() {
+    const H = ui.H;
+    resetTable();
+    ui.stockShown = H.stock.length;
+    ui.trumpShown = H.stock.length > 0;
+    renderTrumpChip();
+    renderNameplates();
+    renderScores();
+    renderStock();
+    fitCards();
+    syncHand();
+    for (let p = 1; p < H.n; p++) {
+      const box = $('#hand-' + posOf(p));
+      for (let j = 0; j < H.hands[p].length; j++) box.appendChild(backEl());
+    }
+    H.trick.forEach((t) => {
+      const el = cardEl(t.c);
+      setPose(el);
+      $('#slot-' + posOf(t.p)).appendChild(el);
+    });
+  }
+
+  function handleGame(msg) {
+    const m = ui.match;
+    switch (msg.t) {
+      case 'match': {
+        if (dlgs.result.open) dlgs.result.close();
+        const fresh = $('#game').classList.contains('hidden');
+        ui.match = {
+          n: msg.n, hs: msg.hs, rules: msg.rules, target: msg.target, p120: msg.p120,
+          sets: byTeam(msg.sets), dealer: localSeat(msg.dealer), handNo: msg.handNo,
+          over: false, winner: -1, names: msg.names
+        };
+        if (fresh) { closeAllDialogs(); showScreen('game'); }
+        buildTable();
+        netIdle();
+        return;
+      }
+      case 'knockAsk':
+        askKnock();
+        netIdle();
+        return;
+      case 'knockWait':
+        clearTableBetweenHands();
+        setStatus(`<b>${nameOf(localSeat(msg.seat))}</b> está cortando o baralho…`);
+        netIdle();
+        return;
+      case 'deal':
+        ui.gen++;
+        if (dlgs.knock.open) dlgs.knock.close();
+        ui.H = mirrorFrom(msg.v);
+        m.handNo = msg.v.handNo;
+        showDeal();
+        return;
+      case 'sync': {
+        const v = msg.v;
+        ui.H = mirrorFrom(v);
+        m.handNo = v.handNo;
+        renderSnapshot();
+        if (msg.last) {
+          ui.H.applied = true;
+          m.over = msg.last.matchOver;
+          m.winner = localTeam(msg.last.matchWinner);
+          const H = ui.H;
+          endHand({ winner: H.pts[0] > 60 ? 0 : H.pts[1] > 60 ? 1 : -1, lines: null });
+          return;
+        }
+        nextStep();
+        return;
+      }
+      case 'play':
+        if (!ui.H) { netIdle(); return; }
+        playCard(localSeat(msg.seat), msg.card);
+        return;
+      case 'trick': {
+        const H = ui.H;
+        if (!H) { netIdle(); return; }
+        const res = {
+          winner: localSeat(msg.winner), points: msg.points, events: withLocalTeam(msg.events),
+          draws: msg.draws.map((d) => ({ p: localSeat(d.p), c: d.c }))
+        };
+        later(850, () => {
+          H.pts = byTeam(msg.pts);
+          H.bonus = byTeam(msg.bonus);
+          res.events.forEach((e) => H.events.push(e));
+          H.trick = [];
+          H.leader = H.turn = res.winner;
+          H.trickNo++;
+          res.draws.forEach((d) => {
+            H.hands[d.p].push(d.c);
+            H.stock.pop();
+            if (d.c === H.trumpCard) H.trumpHolder = d.p;
+          });
+          H.over = msg.over;
+          H.reason = msg.reason;
+          collect(res);
+        });
+        return;
+      }
+      case 'hand': {
+        const H = ui.H;
+        if (!H) { netIdle(); return; }
+        H.pts = byTeam(msg.pts);
+        H.over = true;
+        H.reason = msg.reason;
+        H.applied = true;
+        m.sets = byTeam(msg.sets);
+        m.over = msg.matchOver;
+        m.winner = localTeam(msg.matchWinner);
+        endHand({ winner: localTeam(msg.winner), gains: byTeam(msg.gains), lines: withLocalTeam(msg.lines) });
+        return;
+      }
+      default:
+        netIdle();
+    }
+  }
+
+  /* ---------- Sala de espera ---------- */
+
+  function showLobby() {
+    ui.gen++;
+    net.queue = [];
+    net.busy = false;
+    ui.H = null;
+    closeAllDialogs();
+    showScreen('lobby');
+    renderLobby();
+  }
+
+  function renderLobby() {
+    const r = net.room;
+    if (!r) return;
+    const o = r.opts;
+    const fmt = o.rules === 'capixaba' ? 'Capixaba, até 4 pontos' : ['Jogo único', 'Melhor de 3', 'Melhor de 5'][o.target - 1];
+    $('#lobby-code').textContent = r.code;
+    $('#lobby-desc').textContent = `${o.n === 4 ? '2 × 2' : '1 × 1'} · ${fmt} · ${o.hs} cartas na mão`;
+    $('#invite-link').value = inviteLink(r.code);
+    $('#btn-whatsapp').href = 'https://wa.me/?text=' + encodeURIComponent(inviteText(r.code));
+    const ul = $('#lobby-seats');
+    ul.innerHTML = '';
+    r.seats.forEach((s, i) => {
+      const li = document.createElement('li');
+      li.className = (i === r.you ? 'me' : '') + (s.human ? '' : ' bot');
+      const tags = [i === r.you && 'você', s.human && i === r.host && 'anfitrião', s.human && !s.online && 'desconectado']
+        .filter(Boolean).join(', ');
+      const team = r.seats.length === 4 ? `<span class="team">Dupla ${i % 2 ? 'B' : 'A'}</span>` : '';
+      li.innerHTML = `<span class="dot${s.online ? ' on' : ''}"></span>` +
+        `<span class="sname">${s.human ? esc(s.name) : 'Lugar livre (computador)'}${tags ? ` <small>${tags}</small>` : ''}</span>${team}`;
+      if (!s.human) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn small';
+        b.textContent = 'Sentar aqui';
+        b.addEventListener('click', () => netSend({ t: 'sit', seat: i }));
+        li.appendChild(b);
+      }
+      ul.appendChild(li);
+    });
+    const host = r.you === r.host;
+    const free = r.seats.filter((s) => !s.human).length;
+    $('#btn-start').classList.toggle('hidden', !host);
+    $('#lobby-hint').textContent = (host ? '' : 'Aguardando o anfitrião começar a partida. ') +
+      (free ? (free === 1 ? 'O lugar livre fica com o computador.' : 'Os lugares livres ficam com o computador.') : 'Mesa completa!');
+  }
+
+  /* ------------------------------------------------------------------ */
   /*  Eventos                                                            */
   /* ------------------------------------------------------------------ */
 
@@ -658,9 +1044,8 @@
     $('#fs-p120').classList.toggle('hidden', !cap);
   }
   $$('#menu-form input[name="rules"]').forEach((r) => r.addEventListener('change', syncRulesFields));
-  $('#menu-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
+  function readMenuForm() {
+    const fd = new FormData($('#menu-form'));
     settings.mode = fd.get('mode');
     settings.level = fd.get('level');
     settings.rules = fd.get('rules');
@@ -668,8 +1053,63 @@
     settings.p120 = Number(fd.get('p120'));
     settings.hs = Number(fd.get('hs'));
     saveSettings();
+  }
+  $('#menu-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    readMenuForm();
     startMatch();
   });
+
+  // Online
+  function onlineName() {
+    const v = $('#online-name').value.trim();
+    if (!v) { showOnlineError('Digite seu nome para jogar online.'); $('#online-name').focus(); return null; }
+    settings.name = v.slice(0, 16);
+    saveSettings();
+    return settings.name;
+  }
+  $('#btn-create').addEventListener('click', () => {
+    const name = onlineName();
+    if (!name) return;
+    readMenuForm();
+    const s = settings;
+    netStart({ t: 'create', name, opts: { mode: s.mode, rules: s.rules, target: s.target, p120: s.p120, hs: s.hs, level: s.level } });
+  });
+  function joinFromMenu() {
+    const name = onlineName();
+    if (!name) return;
+    const code = $('#join-code').value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4}$/.test(code)) { showOnlineError('O código da sala tem 4 letras ou números.'); $('#join-code').focus(); return; }
+    netStart({ t: 'join', code, name, token: storedToken(code) });
+  }
+  $('#btn-join').addEventListener('click', joinFromMenu);
+  $('#join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); joinFromMenu(); } });
+  $('#online-name').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if ($('#join-code').value.trim()) joinFromMenu(); else $('#btn-create').click();
+  });
+  $('#btn-start').addEventListener('click', () => netSend({ t: 'start' }));
+  $('#btn-leave').addEventListener('click', leaveRoom);
+  const canShare = typeof navigator.share === 'function';
+  $('#btn-share').textContent = canShare ? 'Compartilhar convite' : 'Copiar convite';
+  $('#btn-share').addEventListener('click', async () => {
+    const code = net.room && net.room.code;
+    if (!code) return;
+    if (canShare) {
+      try { await navigator.share({ title: 'Bisca', text: inviteText(code), url: inviteLink(code) }); } catch (e) { /* cancelado */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(inviteText(code));
+    } catch (e) {
+      const inp = $('#invite-link');
+      inp.select();
+      document.execCommand('copy');
+    }
+    toast('Convite copiado! Cole no WhatsApp ou onde quiser.', 2500);
+  });
+  $('#invite-link').addEventListener('focus', (e) => e.target.select());
 
   // Regras / opções / sair
   const openRules = () => { pauseFor(dlgs.rules); openDialog(dlgs.rules); };
@@ -679,6 +1119,7 @@
     $('#opt-live').checked = settings.live;
     $('#opt-speed').value = settings.speed;
     $('#opt-level').value = settings.level;
+    $('#opt-level-wrap').classList.toggle('hidden', !!net.code);
     pauseFor(dlgs.settings);
     openDialog(dlgs.settings);
   });
@@ -687,7 +1128,7 @@
   $('#opt-level').addEventListener('change', (e) => { settings.level = e.target.value; saveSettings(); });
 
   $('#btn-quit').addEventListener('click', () => { pauseFor(dlgs.quit); openDialog(dlgs.quit); });
-  $('#quit-yes').addEventListener('click', () => { dlgs.quit.close(); goMenu(); });
+  $('#quit-yes').addEventListener('click', () => { dlgs.quit.close(); if (net.code) leaveRoom(); else goMenu(); });
   $('#knock-yes').addEventListener('click', () => answerKnock(true));
   $('#knock-no').addEventListener('click', () => answerKnock(false));
 
@@ -721,6 +1162,27 @@
   syncMenuForm();
   showScreen('menu');
 
+  if (ONLINE) {
+    $('#fs-online').classList.remove('hidden');
+    $('#online-name').value = settings.name || '';
+    const code = (new URLSearchParams(location.search).get('sala') || '').toUpperCase().slice(0, 4);
+    if (code) {
+      $('#join-code').value = code;
+      if (settings.name && storedToken(code)) {
+        // recarregou a página: volta direto para o mesmo lugar
+        netStart({ t: 'join', code, name: settings.name, token: storedToken(code) });
+      } else {
+        const banner = $('#invite-banner');
+        banner.textContent = `Você foi convidado para a sala ${code}. Digite seu nome e toque em “Entrar na sala”.`;
+        banner.classList.remove('hidden');
+        $('#btn-join').classList.add('primary');
+        $('#btn-create').classList.remove('primary');
+        $('#fs-online').scrollIntoView({ block: 'center' });
+        $('#online-name').focus();
+      }
+    }
+  }
+
   // gancho para testes/depuração
-  window.__bisca = { ui, settings, startMatch, humanPlay, cardEl, backEl };
+  window.__bisca = { ui, net, settings, startMatch, humanPlay, cardEl, backEl };
 })();

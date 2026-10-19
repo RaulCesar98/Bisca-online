@@ -1,6 +1,8 @@
 services:
   - type: web
     name: bisca-online
-    runtime: static
-    buildCommand: ""
-    staticPublishPath: .
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health

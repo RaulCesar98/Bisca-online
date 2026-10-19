@@ -1,12 +1,14 @@
 # Bisca
 
-Jogo de Bisca para o navegador, nos modos **1 × 1** (você contra o computador) e **2 × 2** (você e um parceiro
-contra dois adversários). Segue as regras da
-[Wikipedia](https://en.wikipedia.org/wiki/Bisca_(card_game)).
+Jogo de Bisca para o navegador, nos modos **1 × 1** e **2 × 2**, contra o computador ou online com amigos em
+salas com convite. Segue as regras da [Wikipedia](https://en.wikipedia.org/wiki/Bisca_(card_game)), com a
+variação capixaba opcional.
 
 ## Como jogar
 
-Abra o arquivo **`index.html`** no navegador (duplo clique). Não precisa de instalação, servidor nem internet.
+- **Sozinho, sem internet:** abra o arquivo **`index.html`** no navegador (duplo clique).
+- **Online:** rode o servidor (`npm install` e depois `npm start`) e abra http://localhost:5173, ou use o site
+  publicado no Render.
 
 - Clique numa carta da sua mão para jogá-la (ou use as teclas **1–9**, da esquerda para a direita).
 - Menu inicial: modo (1×1 / 2×2), dificuldade (fácil / médio / difícil), regras (clássica / capixaba), tamanho
@@ -68,15 +70,37 @@ no 2×2 (no 1×1 a vaza tem duas cartas).
 
 Nenhum nível enxerga as cartas dos outros jogadores.
 
+## Salas online
+
+1. No menu, escolha modo, regras e cartas, digite seu nome e toque em **Criar sala e convidar**.
+2. Na sala aparece um código de 4 letras e o link de convite (botões **Copiar/Compartilhar** e **WhatsApp**).
+   Quem abre o link cai no menu com o código preenchido: é só digitar o nome e **Entrar na sala**.
+3. No 2 × 2, cada um escolhe o lugar com **Sentar aqui** (Dupla A = lugares 1 e 3, Dupla B = 2 e 4).
+4. O anfitrião toca em **Começar partida**. Lugares vazios ficam com o computador (no nível escolhido no menu).
+
+- O servidor embaralha e confere as jogadas; cada navegador só recebe as próprias cartas.
+- Quem cai ou recarrega a página volta ao mesmo lugar (o navegador guarda a vaga). Enquanto estiver fora, o
+  computador joga por ele.
+- No fim de cada mão qualquer jogador pode tocar em **Próxima mão**. No fim da partida, todos voltam para a sala.
+- As salas ficam na memória do servidor: se ele reiniciar (no plano gratuito do Render ele dorme depois de
+  15 minutos sem uso), as salas abertas somem e é preciso criar outra.
+
+## Publicação (Render)
+
+O `render.yaml` cria um **Web Service** Node gratuito: `npm install` e `node server.js`, com verificação em
+`/health`. No Render: **New → Blueprint**, escolha este repositório e confirme.
+
 ## Arquivos
 
 | Arquivo | Conteúdo |
 | --- | --- |
-| `index.html` | Estrutura da página, menu e diálogos |
+| `index.html` | Estrutura da página, menu, sala e diálogos |
 | `style.css` | Visual (mesa, cartas desenhadas em CSS/SVG, layout responsivo) |
 | `engine.js` | Regras do jogo, sem DOM (também roda no Node) |
 | `ai.js` | Jogadores controlados pelo computador |
-| `app.js` | Interface, animações e fluxo da partida |
+| `app.js` | Interface, animações, fluxo da partida e cliente das salas online |
+| `server.js` | Servidor: arquivos do jogo e salas (WebSocket em `/ws`) |
+| `render.yaml` | Configuração do Render |
 
 ## Testes rápidos no Node
 
