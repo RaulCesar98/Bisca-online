@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bisca</title>
+  <meta name="description" content="Jogo de Bisca no navegador: 1x1 ou 2x2 contra o computador.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230f3d2e'/%3E%3Cpath fill='%23e0b54a' d='M12 20.4l-1.1-1C7 15.9 4.5 13.6 4.5 10.8 4.5 8.6 6.2 7 8.3 7c1.2 0 2.4.6 3.7 1.7C13.3 7.6 14.5 7 15.7 7c2.1 0 3.8 1.6 3.8 3.8 0 2.8-2.500 5.100-6.400 8.600z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- símbolos dos naipes -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="s-H" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></symbol>
+    <symbol id="s-D" viewBox="0 0 24 24"><path d="M12 1.5c2.2 3.4 5.600 6.700 9 10.500-3.400 3.800-6.800 7.100-9 10.500-2.200-3.400-5.600-6.700-9-10.500 3.400-3.800 6.800-7.100 9-10.500z"/></symbol>
+    <symbol id="s-C" viewBox="0 0 24 24"><circle cx="12" cy="7.2" r="4.9"/><circle cx="6" cy="14.2" r="4.9"/><circle cx="18" cy="14.2" r="4.9"/><path d="M12 10.5c.2 4.700-.9 8.300-3.300 11h6.600c-2.400-2.700-3.500-6.300-3.300-11z"/></symbol>
+    <symbol id="s-S" viewBox="0 0 24 24"><path d="M12 1.5C8.500 6.300 3 10.200 3 14.700a4.900 4.900 0 0 0 8.100 3.700c-.1 1.900-.9 3.300-2.400 4.100h6.600c-1.500-.8-2.300-2.200-2.400-4.100a4.900 4.900 0 0 0 8.100-3.700C21 10.200 15.500 6.300 12 1.500z"/></symbol>
+  </defs>
+</svg>
+
+<main id="app">
+
+  <!-- ================= MENU ================= -->
+  <section id="menu" class="screen">
+    <div class="menu-card">
+      <div class="logo" aria-hidden="true">
+        <span class="logo-card c1"><svg class="suit"><use href="#s-S"/></svg></span>
+        <span class="logo-card c2 red"><svg class="suit"><use href="#s-H"/></svg></span>
+        <span class="logo-card c3"><svg class="suit"><use href="#s-C"/></svg></span>
+      </div>
+      <h1>Bisca</h1>
+      <p class="tagline">O clássico jogo de cartas, direto no navegador.</p>
+
+      <form id="menu-form" autocomplete="off">
+        <fieldset>
+          <legend>Modo de jogo</legend>
+          <div class="seg seg-big">
+            <label><input type="radio" name="mode" value="1v1"><span><b>1 × 1</b><small>Você contra o computador</small></span></label>
+            <label><input type="radio" name="mode" value="2v2"><span><b>2 × 2</b><small>Você e um parceiro contra duas máquinas</small></span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Dificuldade</legend>
+          <div class="seg">
+            <label><input type="radio" name="level" value="easy"><span>Fácil</span></label>
+            <label><input type="radio" name="level" value="medium"><span>Médio</span></label>
+            <label><input type="radio" name="level" value="hard"><span>Difícil</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Regras</legend>
+          <div class="seg seg-big">
+            <label><input type="radio" name="rules" value="classic"><span><b>Clássica</b><small>Mão vencida vale 1 jogo</small></span></label>
+            <label><input type="radio" name="rules" value="capixaba"><span><b>Capixaba</b><small>Até 4 pontos, com Heley, capote e Copas</small></span></label>
+          </div>
+        </fieldset>
+
+        <fieldset id="fs-target">
+          <legend>Partida</legend>
+          <div class="seg">
+            <label><input type="radio" name="target" value="1"><span>Jogo único</span></label>
+            <label><input type="radio" name="target" value="2"><span>Melhor de 3</span></label>
+            <label><input type="radio" name="target" value="3"><span>Melhor de 5</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset id="fs-p120" class="hidden">
+          <legend>Fazer 120 pontos vale</legend>
+          <div class="seg">
+            <label><input type="radio" name="p120" value="2"><span>2 pontos</span></label>
+            <label><input type="radio" name="p120" value="3"><span>3 pontos</span></label>
+            <label><input type="radio" name="p120" value="4"><span>4 <small>(fecha)</small></span></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Cartas na mão</legend>
+          <div class="seg">
+            <label><input type="radio" name="hs" value="3"><span>3 <small>(tradicional)</small></span></label>
+            <label><input type="radio" name="hs" value="7"><span>7</span></label>
+            <label><input type="radio" name="hs" value="9"><span>9</span></label>
+          </div>
+        </fieldset>
+
+        <div class="menu-actions">
+          <button type="submit" class="btn primary big" id="btn-play">Jogar</button>
+          <button type="button" class="btn" id="btn-rules-menu">Regras</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ================= JOGO ================= -->
+  <section id="game" class="screen hidden">
+    <header class="topbar">
+      <button class="btn small" id="btn-quit" title="Voltar ao menu">&larr; Menu</button>
+      <div class="scoreboard" id="scoreboard" aria-live="polite">
+        <div class="team team-0" id="team-0"><span class="tname">Você</span><span class="tpts" id="pts-0">0</span></div>
+        <div class="mid">
+          <div class="chip trump-chip" id="trump-chip" title="Naipe do trunfo"></div>
+          <div class="matchinfo" id="matchinfo"></div>
+        </div>
+        <div class="team team-1" id="team-1"><span class="tname">Computador</span><span class="tpts" id="pts-1">0</span></div>
+      </div>
+      <div class="topbtns">
+        <button class="btn small" id="btn-rules" title="Regras">Regras</button>
+        <button class="btn small" id="btn-settings" title="Opções" aria-label="Opções">&#9881;</button>
+      </div>
+    </header>
+
+    <div class="table" id="table" data-n="2">
+      <div class="seat seat-n" id="seat-n">
+        <div class="nameplate" id="np-n"></div>
+        <div class="backs" id="hand-n"></div>
+      </div>
+      <div class="seat seat-w" id="seat-w">
+        <div class="nameplate" id="np-w"></div>
+        <div class="backs v" id="hand-w"></div>
+      </div>
+
+      <div class="center" id="center">
+        <div class="stockzone" id="stockzone">
+          <div class="stackwrap">
+            <div class="trumpcard" id="trumpcard"></div>
+            <div class="stack" id="stack"><span class="count" id="stockcount"></span></div>
+          </div>
+          <div class="stocklabel" id="stocklabel">Monte</div>
+        </div>
+        <div class="trick" id="trick">
+          <div class="slot slot-n" id="slot-n"></div>
+          <div class="slot slot-w" id="slot-w"></div>
+          <div class="slot slot-e" id="slot-e"></div>
+          <div class="slot slot-s" id="slot-s"></div>
+        </div>
+      </div>
+
+      <div class="seat seat-e" id="seat-e">
+        <div class="nameplate" id="np-e"></div>
+        <div class="backs v" id="hand-e"></div>
+      </div>
+      <div class="seat seat-s" id="seat-s">
+        <div class="hand" id="hand-s" role="group" aria-label="Sua mão"></div>
+        <div class="nameplate" id="np-s"></div>
+      </div>
+    </div>
+
+    <div class="statusbar" id="status" role="status" aria-live="polite"></div>
+  </section>
+</main>
+
+<!-- ================= DIÁLOGOS ================= -->
+<dialog id="dlg-result">
+  <form method="dialog" class="dlg-body" id="result-body">
+    <h2 id="result-title"></h2>
+    <p class="result-sub" id="result-sub"></p>
+    <div class="result-bars" id="result-bars"></div>
+    <ul class="result-lines" id="result-lines"></ul>
+    <p class="result-sets" id="result-sets"></p>
+    <div class="dlg-actions" id="result-actions"></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-rules">
+  <div class="dlg-body rules">
+    <h2>Regras da Bisca</h2>
+    <p class="muted">Baseadas na <a href="https://en.wikipedia.org/wiki/Bisca_(card_game)" target="_blank" rel="noopener">Wikipedia</a>.</p>
+    <ul>
+      <li><b>Baralho:</b> 40 cartas (sem 8, 9 e 10).</li>
+      <li><b>Força das cartas:</b> Ás, 7, Rei, Valete, Dama, 6, 5, 4, 3, 2 (da maior para a menor).</li>
+      <li><b>Valor em pontos:</b> Ás 11 &middot; Sete 10 &middot; Rei 4 &middot; Valete 3 &middot; Dama 2 &middot; demais 0. Cada naipe vale 30; o baralho todo, 120.</li>
+      <li><b>Jogadores:</b> 1 × 1, ou 2 × 2 em duplas (parceiros sentam frente a frente e somam pontos juntos).</li>
+      <li><b>Distribuição:</b> 3 cartas para cada um (também há as versões com 7 e 9). A carta seguinte é virada: o naipe dela é o <b>trunfo</b>, e ela fica sob o monte.</li>
+      <li><b>Jogada:</b> quem está à esquerda do carteador abre a vaza; todos jogam uma carta, em sentido anti-horário. <b>Não é obrigatório seguir o naipe.</b></li>
+      <li><b>Quem leva a vaza:</b> o maior trunfo; se ninguém jogou trunfo, a maior carta do naipe da primeira carta jogada.</li>
+      <li><b>Compra:</b> o vencedor recolhe as cartas, compra primeiro (os outros em seguida) e abre a próxima vaza. Quem compra por último fica com o trunfo virado.</li>
+      <li><b>Fim da mão:</b> quando as cartas acabam, ou assim que uma equipe passa de 60 pontos (61 ou mais). Com 60 a 60 a mão empata.</li>
+      <li><b>Jogos:</b> a equipe que vence a mão ganha 1 ponto de jogo; a partida pode ser de um jogo, melhor de 3 ou melhor de 5.</li>
+    </ul>
+    <h3>Bisca Capixaba</h3>
+    <p class="muted">Variação do Espírito Santo. Quem é dono do baralho dita as regras; aqui elas são estas:</p>
+    <ul>
+      <li><b>Partida:</b> vai até <b>4 pontos</b>, com quantas mãos forem precisas. A mão é jogada até a última carta.</li>
+      <li><b>61:</b> quem faz 61 ou mais ganha 1 ponto (Copas: 2).</li>
+      <li><b>Capote:</b> se o perdedor fizer menos de 31, o vencedor ganha 2 pontos (Copas: 3).</li>
+      <li><b>120:</b> quem faz todos os 120 pontos ganha 2, 3 ou 4 pontos, conforme escolhido no menu (4 fecha a partida).</li>
+      <li><b>Heley</b> (“rélêi”): o Ás de trunfo jogado depois do 7 de trunfo do adversário na mesma vaza: +1 para quem jogou o Ás (Heley de Copas: +2).</li>
+      <li><b>Heley de fundo</b> e <b>Heley de Roda</b> (2 × 2: o 7 abre a vaza e o Ás é a quarta carta) valem o mesmo: +1, ou +2 de Copas. Ás e 7 da mesma dupla não contam.</li>
+      <li><b>Rodar o 7:</b> quem abre a primeira vaza com o 7 de trunfo e não leva o Ás em cima ganha +1 (Copas: +2).</li>
+      <li><b>Copas:</b> quem corta o baralho pode <b>bater</b> nele: o trunfo passa a ser Copas, e as pontuações extras valem mais. Em geral é quem está perdendo que bate.</li>
+      <li><b>Trunfo:</b> a carta virada sob o monte nunca é Bisca (7 ou Ás).</li>
+      <li>Os pontos extras contam na hora: se uma dupla chegar a 4 durante a mão, a partida acaba ali.</li>
+    </ul>
+    <form method="dialog" class="dlg-actions"><button class="btn primary">Entendi</button></form>
+  </div>
+</dialog>
+
+<dialog id="dlg-knock">
+  <div class="dlg-body">
+    <h2>Você corta o baralho</h2>
+    <p class="muted">Se bater no baralho, o trunfo desta mão será <b>Copas</b> e as pontuações extras valem mais (para os dois lados).</p>
+    <p class="knock-score" id="knock-score"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="knock-no">Cortar normalmente</button>
+      <button type="button" class="btn primary" id="knock-yes">Bater (Copas)</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-quit">
+  <div class="dlg-body">
+    <h2>Sair da partida?</h2>
+    <p class="muted">O andamento da partida atual será perdido.</p>
+    <div class="dlg-actions">
+      <button type="button" class="btn" onclick="this.closest('dialog').close()">Continuar jogando</button>
+      <button type="button" class="btn primary" id="quit-yes">Sair para o menu</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog" class="dlg-body" id="settings-form">
+    <h2>Opções</h2>
+    <label class="opt"><input type="checkbox" id="opt-live"> <span>Mostrar a pontuação durante a mão</span></label>
+    <label class="opt"><span>Velocidade</span>
+      <select id="opt-speed">
+        <option value="slow">Lenta</option>
+        <option value="normal">Normal</option>
+        <option value="fast">Rápida</option>
+      </select>
+    </label>
+    <label class="opt" id="opt-level-wrap"><span>Dificuldade dos adversários</span>
+      <select id="opt-level">
+        <option value="easy">Fácil</option>
+        <option value="medium">Médio</option>
+        <option value="hard">Difícil</option>
+      </select>
+    </label>
+    <p class="muted small">A dificuldade vale a partir da próxima jogada.</p>
+    <div class="dlg-actions"><button class="btn primary" value="ok">Fechar</button></div>
+  </form>
+</dialog>
+
+<script src="engine.js"></script>
+<script src="ai.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
