@@ -56,6 +56,7 @@ Variação do Espírito Santo, escolhida no menu. Mesma mecânica de vazas; muda
 | Trunfo | A carta virada nunca é Bisca (7 ou Ás) |
 | Naipe não repete | Em cada ciclo de 4 quedas (mãos) cada naipe é trunfo uma vez; depois o ciclo recomeça. Com Copas já usada no ciclo, não dá para bater |
 | Ás depois do 7 | O Ás de trunfo só pode ser jogado depois que o 7 de trunfo saiu, exceto se for a última carta na mão. Na tela ele fica apagado enquanto estiver bloqueado |
+| 7 não fecha a vaza | O 7 de trunfo não pode ser a última carta de uma vaza (4ª no 2×2, 2ª no 1×1), exceto como última carta na mão ou quando é a única carta liberada (só 7 e Ás de trunfo na mão) |
 
 Os pontos extras contam na hora: se uma dupla chega a 4 durante a mão, a partida termina ali.
 

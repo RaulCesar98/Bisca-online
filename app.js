@@ -356,13 +356,14 @@
     markBlocked();
   }
 
-  /** Capixaba: o Ás de trunfo fica apagado na mão enquanto o 7 de trunfo não sair. */
+  /** Capixaba: apaga na mão as cartas que não podem ser jogadas agora (Ás antes do 7; 7 fechando a vaza). */
   function markBlocked() {
     const H = ui.H;
+    const legal = H && H.hands[0].length ? B.legalCards(H, 0) : null;
     ui.handEls.forEach((el, id) => {
-      const blocked = !!H && B.aceBlocked(H, 0, id);
+      const blocked = !!legal && !legal.includes(id);
       el.classList.toggle('blocked', blocked);
-      if (blocked) el.title = 'O Ás de trunfo só pode sair depois do 7 de trunfo';
+      if (blocked) el.title = B.BLOCK_MSG[B.blockReason(H, 0, id)] || '';
       else el.removeAttribute('title');
     });
   }
@@ -502,8 +503,8 @@
 
   function humanPlay(c) {
     if (!ui.humanTurn || ui.H.turn !== 0 || !ui.handEls.has(c)) return;
-    if (B.aceBlocked(ui.H, 0, c)) {
-      setStatus('O <b>Ás de trunfo</b> só pode sair depois do 7 de trunfo. Escolha outra carta.');
+    if (!B.legalCards(ui.H, 0).includes(c)) {
+      setStatus(`${B.BLOCK_MSG[B.blockReason(ui.H, 0, c)] || 'Essa carta não pode ser jogada agora.'} Escolha outra carta.`);
       return;
     }
     setHumanTurn(false);

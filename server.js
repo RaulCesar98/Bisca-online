@@ -345,8 +345,8 @@ const handlers = {
     const H = room && room.H;
     const c = Number(msg.card);
     if (!H || room.phase !== 'play' || H.over || H.turn !== ws.seat || !B.legalCards(H, ws.seat).includes(c)) {
-      const ace = H && B.aceBlocked(H, ws.seat, c);
-      send(ws, { t: 'error', code: 'play', msg: ace ? 'O Ás de trunfo só pode sair depois do 7.' : 'Jogada não aceita.' });
+      const why = H && H.turn === ws.seat && B.blockReason(H, ws.seat, c);
+      send(ws, { t: 'error', code: 'play', msg: why ? B.BLOCK_MSG[why] : 'Jogada não aceita.' });
       return;
     }
     room.gen++;

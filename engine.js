@@ -122,14 +122,34 @@
     };
   }
 
-  /** Na capixaba o Ás de trunfo só sai depois do 7 de trunfo, a não ser que seja a última carta na mão. */
-  function aceBlocked(s, p, c) {
-    return s.rules === 'capixaba' && !s.trump7Out && c === s.trump * 10 + STR_A && s.hands[p].length > 1;
+  /**
+   * Restrições da capixaba (só valem para o trunfo da mão e nunca para a última carta na mão):
+   *  'ace'  : o Ás de trunfo só sai depois do 7 de trunfo;
+   *  'seven': o 7 de trunfo não pode ser a última carta da vaza.
+   * Retorna o motivo do bloqueio da carta c para o jogador p, ou null.
+   */
+  function blockReason(s, p, c) {
+    if (s.rules !== 'capixaba' || s.hands[p].length <= 1) return null;
+    if (c === s.trump * 10 + STR_A && !s.trump7Out) return 'ace';
+    if (c === s.trump * 10 + STR_7 && s.turn === p && s.trick.length === s.n - 1) return 'seven';
+    return null;
   }
+  const aceBlocked = (s, p, c) => blockReason(s, p, c) === 'ace';
+  const BLOCK_MSG = {
+    ace: 'O Ás de trunfo só pode sair depois do 7 de trunfo.',
+    seven: 'O 7 de trunfo não pode ser a última carta da vaza.'
+  };
 
-  /** Não há obrigação de seguir naipe nem de cortar: vale qualquer carta (exceto o Ás de trunfo bloqueado). */
+  /**
+   * Não há obrigação de seguir naipe nem de cortar: vale qualquer carta, menos as bloqueadas acima.
+   * Se tudo estiver bloqueado (só o 7 e o Ás de trunfo na mão, sendo o último da vaza), o 7 é liberado.
+   */
   function legalCards(s, p) {
-    return s.hands[p].filter((c) => !aceBlocked(s, p, c));
+    const h = s.hands[p];
+    const ok = h.filter((c) => !blockReason(s, p, c));
+    if (ok.length) return ok;
+    const seven = s.trump * 10 + STR_7;
+    return h.includes(seven) ? [seven] : h.slice();
   }
 
   function play(s, c) {
@@ -139,7 +159,10 @@
     const h = s.hands[p];
     const i = h.indexOf(c);
     if (i < 0) throw new Error(`Jogador ${p} não tem a carta ${c}`);
-    if (aceBlocked(s, p, c)) throw new Error('O Ás de trunfo só sai depois do 7');
+    if (!legalCards(s, p).includes(c)) {
+      throw new Error(blockReason(s, p, c) === 'seven' ? 'O 7 de trunfo não pode ser a última carta da vaza'
+        : 'O Ás de trunfo só sai depois do 7');
+    }
     h.splice(i, 1);
     if (c === s.trump * 10 + STR_7) s.trump7Out = true;
     s.trick.push({ p, c });
@@ -338,7 +361,7 @@
     SUITS, SUIT_NAMES, RANKS, RANK_NAMES, POINTS, WIN_POINTS,
     suitOf, strOf, ptsOf, cardInfo, cardName, teamOf, shuffle, seeded, beats,
     newHand, cloneState, legalCards, play, trickBestIndex, trickEvents, resolveTrick, outcome,
-    baseAward, handGains, newMatch, cutterOf, usedSuitsOf, canKnock, startHand, finishHand, aceBlocked,
+    baseAward, handGains, newMatch, cutterOf, usedSuitsOf, canKnock, startHand, finishHand, aceBlocked, blockReason, BLOCK_MSG,
     STR_7, STR_A, HEARTS, CAPIXABA_TARGET
   };
 });
