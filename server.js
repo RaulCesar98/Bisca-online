@@ -153,7 +153,7 @@ function viewFor(room, seat) {
     trumpCard: H.trumpCard, trump: H.trump, trumpHolder: H.trumpHolder,
     trick: H.trick.map((t) => ({ p: t.p, c: t.c })), leader: H.leader, turn: H.turn,
     pts: H.pts, bonus: H.bonus, events: H.events, over: H.over, reason: H.reason,
-    rules: H.rules, knocked: H.knocked, trickNo: H.trickNo,
+    rules: H.rules, knocked: H.knocked, trump7Out: H.trump7Out, trickNo: H.trickNo,
     handNo: m.handNo, sets: m.sets, target: m.target, p120: m.p120
   };
 }
@@ -171,7 +171,7 @@ function beginHand(room) {
   const m = room.match;
   room.H = null;
   each(room, () => matchInfo(room));
-  if (m.rules === 'capixaba') {
+  if (B.canKnock(m)) {
     const cutter = B.cutterOf(m);
     if (isLive(room.seats[cutter])) {
       room.phase = 'knock';
@@ -344,8 +344,9 @@ const handlers = {
     const room = ws.room;
     const H = room && room.H;
     const c = Number(msg.card);
-    if (!H || room.phase !== 'play' || H.over || H.turn !== ws.seat || !H.hands[ws.seat].includes(c)) {
-      send(ws, { t: 'error', code: 'play', msg: 'Jogada não aceita.' });
+    if (!H || room.phase !== 'play' || H.over || H.turn !== ws.seat || !B.legalCards(H, ws.seat).includes(c)) {
+      const ace = H && B.aceBlocked(H, ws.seat, c);
+      send(ws, { t: 'error', code: 'play', msg: ace ? 'O Ás de trunfo só pode sair depois do 7.' : 'Jogada não aceita.' });
       return;
     }
     room.gen++;

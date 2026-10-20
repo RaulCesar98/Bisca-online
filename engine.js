@@ -63,7 +63,8 @@
   /**
    * Nova mão. n = 2 ou 4 jogadores (índices em sentido anti-horário).
    * opts.rules = 'classic' (padrão) ou 'capixaba'. Na capixaba o indicador do trunfo nunca é
-   * Bisca (7 ou Ás) e, se quem corta bateu no baralho (opts.forceHearts), o trunfo é Copas.
+   * Bisca (7 ou Ás), não repete naipes de opts.usedSuits (as outras quedas do ciclo de 4) e, se
+   * quem corta bateu no baralho (opts.forceHearts), o trunfo é Copas.
    * Distribuição: começa pelo jogador à direita do carteador (dealer+1) e termina
    * nele; a carta seguinte é virada e vai para o fundo do monte (define o trunfo).
    * Quem corta (à esquerda do carteador) abre a primeira vaza.
@@ -77,7 +78,9 @@
     const rules = opts.rules === 'capixaba' ? 'capixaba' : 'classic';
     let trumpCard = -1;
     if (rules === 'capixaba') {
-      const eligible = deck.filter((c) => strOf(c) < STR_7 && (!opts.forceHearts || suitOf(c) === HEARTS));
+      const used = opts.usedSuits || [];
+      const eligible = deck.filter((c) => strOf(c) < STR_7 &&
+        (opts.forceHearts ? suitOf(c) === HEARTS : !used.includes(suitOf(c))));
       trumpCard = eligible[Math.floor(rng() * eligible.length)];
       deck.splice(deck.indexOf(trumpCard), 1);
     }
@@ -98,6 +101,7 @@
       over: false, reason: null, trickNo: 0,
       // regras capixabas
       rules, knocked: !!opts.forceHearts,
+      trump7Out: false,                     // o 7 de trunfo já foi jogado (libera o Ás)
       bonus: [0, 0], events: [],            // pontos extras de jogo ganhos nesta mão
       matchPts: (opts.matchPts || [0, 0]).slice(), target: opts.target || CAPIXABA_TARGET,
       p120: opts.p120 || 4
@@ -113,14 +117,19 @@
       leader: s.leader, turn: s.turn,
       pts: s.pts.slice(), taken: s.taken.slice(), tricks: s.tricks.slice(),
       seenMask: s.seenMask.slice(), over: s.over, reason: s.reason, trickNo: s.trickNo,
-      rules: s.rules, knocked: s.knocked, bonus: s.bonus.slice(), events: s.events.slice(),
+      rules: s.rules, knocked: s.knocked, trump7Out: s.trump7Out, bonus: s.bonus.slice(), events: s.events.slice(),
       matchPts: s.matchPts, target: s.target, p120: s.p120
     };
   }
 
-  /** Não há obrigação de seguir naipe nem de cortar: qualquer carta da mão é válida. */
+  /** Na capixaba o Ás de trunfo só sai depois do 7 de trunfo, a não ser que seja a última carta na mão. */
+  function aceBlocked(s, p, c) {
+    return s.rules === 'capixaba' && !s.trump7Out && c === s.trump * 10 + STR_A && s.hands[p].length > 1;
+  }
+
+  /** Não há obrigação de seguir naipe nem de cortar: vale qualquer carta (exceto o Ás de trunfo bloqueado). */
   function legalCards(s, p) {
-    return s.hands[p].slice();
+    return s.hands[p].filter((c) => !aceBlocked(s, p, c));
   }
 
   function play(s, c) {
@@ -130,7 +139,9 @@
     const h = s.hands[p];
     const i = h.indexOf(c);
     if (i < 0) throw new Error(`Jogador ${p} não tem a carta ${c}`);
+    if (aceBlocked(s, p, c)) throw new Error('O Ás de trunfo só sai depois do 7');
     h.splice(i, 1);
+    if (c === s.trump * 10 + STR_7) s.trump7Out = true;
     s.trick.push({ p, c });
     s.turn = s.trick.length === s.n ? -1 : (p + 1) % s.n;
   }
@@ -262,6 +273,7 @@
       n: opts.n, hs: opts.hs, rules, p120: opts.p120 || 4,
       target: rules === 'capixaba' ? CAPIXABA_TARGET : opts.target,
       sets: [0, 0], dealer: Math.floor(rng() * opts.n), handNo: 0,
+      usedSuits: [],                      // capixaba: trunfos das quedas do ciclo atual de 4
       over: false, winner: -1
     };
   }
@@ -271,12 +283,28 @@
     return (match.dealer + match.n - 1) % match.n;
   }
 
+  /** Naipes que já foram trunfo no ciclo atual (a cada 4 quedas os quatro naipes voltam a valer). */
+  function usedSuitsOf(match) {
+    const used = match.usedSuits || [];
+    return used.length >= 4 ? [] : used;
+  }
+
+  /** Só dá para bater (Copas) se Copas ainda não foi trunfo neste ciclo de 4 quedas. */
+  function canKnock(match) {
+    return match.rules === 'capixaba' && !usedSuitsOf(match).includes(HEARTS);
+  }
+
   function startHand(match, rng, forceHearts) {
     match.handNo++;
-    return newHand({
+    const capixaba = match.rules === 'capixaba';
+    const used = capixaba ? usedSuitsOf(match) : [];
+    const s = newHand({
       n: match.n, hs: match.hs, dealer: match.dealer, rng, rules: match.rules,
-      forceHearts: !!forceHearts, matchPts: match.sets, target: match.target, p120: match.p120
+      forceHearts: !!forceHearts && canKnock(match), usedSuits: used,
+      matchPts: match.sets, target: match.target, p120: match.p120
     });
+    if (capixaba) match.usedSuits = used.concat([s.trump]);
+    return s;
   }
 
   /**
@@ -310,7 +338,7 @@
     SUITS, SUIT_NAMES, RANKS, RANK_NAMES, POINTS, WIN_POINTS,
     suitOf, strOf, ptsOf, cardInfo, cardName, teamOf, shuffle, seeded, beats,
     newHand, cloneState, legalCards, play, trickBestIndex, trickEvents, resolveTrick, outcome,
-    baseAward, handGains, newMatch, cutterOf, startHand, finishHand,
+    baseAward, handGains, newMatch, cutterOf, usedSuitsOf, canKnock, startHand, finishHand, aceBlocked,
     STR_7, STR_A, HEARTS, CAPIXABA_TARGET
   };
 });

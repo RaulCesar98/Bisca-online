@@ -382,3 +382,6 @@ dialog[open] { animation: dlg-in .22s ease-out; }
   * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
 .hand .card.sending { opacity: .55; transform: translateY(-.4em); }
+.hand .card.blocked { filter: grayscale(.7) brightness(.62); }
+.hand.my-turn .card.blocked { cursor: not-allowed; }
+.hand.my-turn .card.blocked:hover { translate: 0 0; box-shadow: 0 .1em .3em rgba(0, 0, 0, .5); }

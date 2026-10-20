@@ -341,6 +341,7 @@
       hand.appendChild(el); // reordena
     });
     layoutHand();
+    markBlocked();
     ids.forEach((id, i) => {
       const el = ui.handEls.get(id);
       el.dataset.idx = String(i + 1);
@@ -352,6 +353,18 @@
   function setHumanTurn(on) {
     ui.humanTurn = on;
     $('#hand-s').classList.toggle('my-turn', on);
+    markBlocked();
+  }
+
+  /** Capixaba: o Ás de trunfo fica apagado na mão enquanto o 7 de trunfo não sair. */
+  function markBlocked() {
+    const H = ui.H;
+    ui.handEls.forEach((el, id) => {
+      const blocked = !!H && B.aceBlocked(H, 0, id);
+      el.classList.toggle('blocked', blocked);
+      if (blocked) el.title = 'O Ás de trunfo só pode sair depois do 7 de trunfo';
+      else el.removeAttribute('title');
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -375,7 +388,7 @@
   function beginHand() {
     ui.gen++;
     const m = ui.match;
-    if (m.rules !== 'capixaba') { dealHand(false); return; }
+    if (!B.canKnock(m)) { dealHand(false); return; } // Copas já foi trunfo neste ciclo de 4 quedas
     const cutter = B.cutterOf(m);
     if (cutter !== 0) { dealHand(AI.decideKnock(m, cutter, Math.random)); return; }
     ui.knockGen = ui.gen;
@@ -489,6 +502,10 @@
 
   function humanPlay(c) {
     if (!ui.humanTurn || ui.H.turn !== 0 || !ui.handEls.has(c)) return;
+    if (B.aceBlocked(ui.H, 0, c)) {
+      setStatus('O <b>Ás de trunfo</b> só pode sair depois do 7 de trunfo. Escolha outra carta.');
+      return;
+    }
     setHumanTurn(false);
     if (net.code) {
       ui.handEls.get(c).classList.add('sending');
@@ -848,13 +865,14 @@
       trick: v.trick.map((t) => ({ p: localSeat(t.p), c: t.c })),
       leader: localSeat(v.leader), turn: v.turn < 0 ? -1 : localSeat(v.turn),
       pts: byTeam(v.pts), bonus: byTeam(v.bonus), events: withLocalTeam(v.events),
-      over: v.over, reason: v.reason, rules: v.rules, knocked: v.knocked, trickNo: v.trickNo, applied: false
+      over: v.over, reason: v.reason, rules: v.rules, knocked: v.knocked, trump7Out: v.trump7Out, trickNo: v.trickNo, applied: false
     };
   }
 
   function mirrorPlay(H, p, c) {
     const h = H.hands[p];
     if (p === 0) { const i = h.indexOf(c); if (i >= 0) h.splice(i, 1); } else h.pop();
+    if (c === H.trump * 10 + B.STR_7) H.trump7Out = true;
     H.trick.push({ p, c });
     H.turn = H.trick.length === H.n ? -1 : (p + 1) % H.n;
   }

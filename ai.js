@@ -94,9 +94,11 @@
       return par.willing * (1 - none);
     }
 
-    let bestScore = -Infinity, bestCard = hand[0];
-    for (let i = 0; i < len; i++) {
-      const c = hand[i], su = (c / 10) | 0, st = c % 10, pc = PTS[st];
+    const cands = B.legalCards(s, p);
+    if (cands.length === 1) return cands[0];
+    let bestScore = -Infinity, bestCard = cands[0];
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i], su = (c / 10) | 0, st = c % 10, pc = PTS[st];
       let bc, mine;
       if (bi < 0) { bc = c; mine = true; }
       else {
@@ -191,7 +193,7 @@
   }
 
   function mcChoose(s, p, rng, opts) {
-    const hand = s.hands[p];
+    const hand = B.legalCards(s, p);
     const myTeam = B.teamOf(s, p);
     const maxSamples = (opts && opts.samples) || 500;
     const budget = (opts && opts.ms) || 350;
@@ -227,7 +229,7 @@
 
   function choose(s, p, level, rng, opts) {
     rng = rng || Math.random;
-    const hand = s.hands[p];
+    const hand = B.legalCards(s, p);
     if (hand.length === 1) return hand[0];
     switch (level) {
       case 'easy':
@@ -245,7 +247,7 @@
    * (os pontos extras valem mais, então só compensa para quem está perdendo).
    */
   function decideKnock(match, p, rng) {
-    if (match.rules !== 'capixaba') return false;
+    if (!B.canKnock(match)) return false;
     rng = rng || Math.random;
     const mine = match.n === 4 ? p & 1 : p;
     const behind = match.sets[1 - mine] - match.sets[mine];
